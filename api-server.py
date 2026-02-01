@@ -24,6 +24,7 @@ from threading import Lock
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
+from pdf2image import convert_from_path
 import requests
 
 # Configuration
@@ -548,27 +549,153 @@ class JobProcessor(threading.Thread):
         return tags
 
     def analyze_document(self, file_path: Path, job: Job) -> Dict:
-        """Analyze document (simplified - returns extraction note)"""
-        return {
-            "document_summary": "文档分析需要转换为图像格式。当前版本仅支持图像文件（JPG、PNG、WEBP）的直接分析。请将PDF或Excel文件的页面截图后上传。",
-            "key_insights": [],
-            "analysis": {
-                "sentiment": "neutral",
-                "topics": ["文档处理"],
-                "entities": [],
-                "complexity_score": 0,
-            },
-            "extracted_images": [],
-            "text_content": "",
-            "tags": ["文档", "需转换"],
-            "metadata": {
-                "confidence_score": 0,
-                "processing_model": "qwen3-vl-8b-q8",
-                "tokens_used": 0,
-                "processing_time_ms": 0,
-                "note": "请将文档转换为图像格式后上传",
-            },
-        }
+        """Analyze document - converts PDF pages to images and analyzes each"""
+        try:
+            # Convert PDF to images
+            images = convert_from_path(str(file_path), dpi=150)
+
+            if not images:
+                return {
+                    "document_summary": "无法读取PDF文档",
+                    "key_insights": [],
+                    "analysis": {
+                        "sentiment": "neutral",
+                        "topics": [],
+                        "entities": [],
+                        "complexity_score": 0,
+                    },
+                    "extracted_images": [],
+                    "text_content": "",
+                    "tags": ["PDF", "读取失败"],
+                    "metadata": {
+                        "confidence_score": 0,
+                        "processing_model": "qwen3-vl-8b-q8",
+                        "tokens_used": 0,
+                    },
+                }
+
+            all_summaries = []
+            all_insights = []
+            all_images = []
+            total_tokens = 0
+            page_num = 1
+
+            # Process each page
+            for image in images:
+                # Save temporary image
+                temp_img_path = UPLOAD_DIR / f"{job.job_id}_page_{page_num}.jpg"
+                image.save(str(temp_img_path), "JPEG", quality=85)
+
+                # Analyze with VLM
+                prompt = get_template_prompt(
+                    job.prompt_template, job.options.get("custom_prompt")
+                )
+
+                # Convert to base64
+                with open(temp_img_path, "rb") as f:
+                    img_base64 = base64.b64encode(f.read()).decode()
+
+                # Call VLM
+                try:
+                    response = requests.post(
+                        "http://localhost:8080/v1/chat/completions",
+                        json={
+                            "model": "qwen3-vl",
+                            "messages": [
+                                {
+                                    "role": "user",
+                                    "content": [
+                                        {
+                                            "type": "image_url",
+                                            "image_url": {
+                                                "url": f"data:image/jpeg;base64,{img_base64}"
+                                            },
+                                        },
+                                        {"type": "text", "text": prompt},
+                                    ],
+                                }
+                            ],
+                            "max_tokens": job.options.get("max_tokens", 2048),
+                            "temperature": 0.7,
+                        },
+                        timeout=300,
+                    )
+
+                    result = response.json()
+                    page_analysis = result["choices"][0]["message"]["content"]
+                    page_tokens = result.get("usage", {}).get("total_tokens", 0)
+                    total_tokens += page_tokens
+
+                except Exception as e:
+                    page_analysis = f"分析错误: {str(e)}"
+                    page_tokens = 0
+
+                # Save image to images directory
+                image_id = f"img_{uuid.uuid4().hex[:8]}"
+                saved_image = IMAGES_DIR / f"{job.job_id}_{image_id}.jpg"
+                image.save(str(saved_image))
+
+                # Add to results
+                all_summaries.append(f"第{page_num}页: {page_analysis[:300]}")
+                all_insights.extend(page_analysis.split("\n")[:3])
+
+                all_images.append(
+                    {
+                        "image_id": image_id,
+                        "page": page_num,
+                        "description": page_analysis[:200],
+                        "insights": page_analysis,
+                        "reference_url": f"http://192.168.1.196:8081/api/v1/images/{job.job_id}/{image_id}",
+                    }
+                )
+
+                # Clean up temp file
+                temp_img_path.unlink(missing_ok=True)
+                page_num += 1
+
+            # Update job tokens
+            job.tokens_used = total_tokens
+
+            return {
+                "document_summary": " | ".join(all_summaries),
+                "key_insights": list(set(all_insights))[:10],
+                "analysis": {
+                    "sentiment": "neutral",
+                    "topics": ["PDF文档", f"{len(images)}页"],
+                    "entities": [],
+                    "complexity_score": min(1.0, len(images) * 0.1),
+                },
+                "extracted_images": all_images,
+                "text_content": "",
+                "tags": ["PDF", f"{len(images)}页"],
+                "metadata": {
+                    "confidence_score": 0.85,
+                    "processing_model": "qwen3-vl-8b-q8",
+                    "tokens_used": total_tokens,
+                    "pages_processed": len(images),
+                },
+            }
+
+        except Exception as e:
+            return {
+                "document_summary": f"PDF处理错误: {str(e)}",
+                "key_insights": [],
+                "analysis": {
+                    "sentiment": "neutral",
+                    "topics": ["PDF"],
+                    "entities": [],
+                    "complexity_score": 0,
+                },
+                "extracted_images": [],
+                "text_content": "",
+                "tags": ["PDF", "错误"],
+                "metadata": {
+                    "confidence_score": 0,
+                    "processing_model": "qwen3-vl-8b-q8",
+                    "tokens_used": 0,
+                    "error": str(e),
+                },
+            }
 
     def detect_sentiment(self, text: str) -> str:
         """Simple sentiment detection"""
