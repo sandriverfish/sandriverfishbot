@@ -10,7 +10,8 @@ LLAMA_SERVER="/home/michael/src/llama.cpp/build/bin/llama-server"
 MODEL_PATH="/home/michael/models/qwen3vl/Qwen3VL-8B-Instruct-Q8_0.gguf"
 MMPROJ_PATH="/home/michael/models/qwen3vl/mmproj-Qwen3VL-8B-Instruct-Q8_0.gguf"
 API_SERVER="/home/michael/sandriverfishbot/api-server.py"
-PORT=8080
+PORT=8081
+LLAMA_PORT=8080
 LOG_DIR="/home/michael/sandriverfishbot/logs"
 
 # Colors

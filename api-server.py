@@ -30,7 +30,8 @@ import requests
 LLAMA_SERVER_PATH = "/home/michael/src/llama.cpp/build/bin/llama-server"
 MODEL_PATH = "/home/michael/models/qwen3vl/Qwen3VL-8B-Instruct-Q8_0.gguf"
 MMPROJ_PATH = "/home/michael/models/qwen3vl/mmproj-Qwen3VL-8B-Instruct-Q8_0.gguf"
-PORT = 8080
+PORT = 8081
+LLAMA_SERVER_PORT = 8080
 MAX_CONCURRENT_JOBS = 3
 WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET", "vlm-webhook-secret-2025")
 JOBS_DIR = Path("/tmp/vlm-jobs")
@@ -338,7 +339,7 @@ class JobProcessor(threading.Thread):
         # Call llama-server API
         try:
             response = requests.post(
-                f"http://localhost:{PORT}/v1/chat/completions",
+                f"http://localhost:{LLAMA_SERVER_PORT}/v1/chat/completions",
                 json={
                     "model": "qwen3-vl",
                     "messages": [

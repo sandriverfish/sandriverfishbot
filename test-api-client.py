@@ -9,7 +9,7 @@ import time
 import sys
 
 # Configuration
-VLM_BASE_URL = "http://192.168.1.196:8080"
+VLM_BASE_URL = "http://192.168.1.196:8081"
 TEST_IMAGE_URL = "https://upload.wikimedia.org/wikipedia/commons/thumb/4/47/PNG_transparency_demonstration_1.png/300px-PNG_transparency_demonstration_1.png"
 
 
