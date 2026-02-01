@@ -9,9 +9,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LLAMA_SERVER="/home/michael/src/llama.cpp/build/bin/llama-server"
 MODEL_PATH="/home/michael/models/qwen3vl/Qwen3VL-8B-Instruct-Q8_0.gguf"
 MMPROJ_PATH="/home/michael/models/qwen3vl/mmproj-Qwen3VL-8B-Instruct-Q8_0.gguf"
-API_SERVER="$SCRIPT_DIR/api-server.py"
+API_SERVER="/home/michael/sandriverfishbot/api-server.py"
 PORT=8080
-LOG_DIR="$SCRIPT_DIR/logs"
+LOG_DIR="/home/michael/sandriverfishbot/logs"
 
 # Colors
 RED='\033[0;31m'
