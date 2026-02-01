@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VLM PDF 上传 - BestBox</title>
+    <style>
+        * { box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
+        body { max-width: 800px; margin: 0 auto; padding: 20px; background: #f5f5f5; }
+        h1 { color: #333; text-align: center; }
+        .upload-box {
+            background: white; padding: 40px; border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1); text-align: center;
+        }
+        .drop-zone {
+            border: 2px dashed #ccc; padding: 40px; border-radius: 10px;
+            cursor: pointer; transition: all 0.3s;
+        }
+        .drop-zone:hover { border-color: #4CAF50; background: #f9f9f9; }
+        .drop-zone.dragover { border-color: #4CAF50; background: #e8f5e9; }
+        input[type="file"] { display: none; }
+        .btn {
+            background: #4CAF50; color: white; padding: 12px 30px;
+            border: none; border-radius: 5px; cursor: pointer; font-size: 16px;
+            margin-top: 20px;
+        }
+        .btn:hover { background: #45a049; }
+        .btn:disabled { background: #ccc; cursor: not-allowed; }
+        .options {
+            margin: 20px 0; text-align: left; background: #f9f9f9; padding: 20px; border-radius: 5px;
+        }
+        .option-group { margin-bottom: 15px; }
+        .option-group label { display: block; margin-bottom: 5px; font-weight: bold; }
+        .option-group select, .option-group input {
+            width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;
+        }
+        #status { margin-top: 20px; padding: 15px; border-radius: 5px; display: none; }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        .processing { background: #fff3cd; color: #856404; }
+        .result {
+            margin-top: 20px; background: white; padding: 20px; border-radius: 5px;
+            text-align: left; max-height: 400px; overflow-y: auto;
+        }
+        .result pre { background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>📄 VLM 文档分析上传</h1>
+    
+    <div class="upload-box">
+        <form id="uploadForm">
+            <div class="drop-zone" id="dropZone">
+                <p>📁 拖拽 PDF 文件到这里 或 点击选择文件</p>
+                <p style="color: #666; font-size: 14px;">支持 PDF, JPG, PNG (最大 100MB)</p>
+                <input type="file" id="fileInput" accept=".pdf,.jpg,.jpeg,.png,.webp">
+            </div>
+            
+            <div id="fileInfo" style="margin-top: 15px; display: none;">
+                <p>📎 已选择: <strong id="fileName"></strong></p>
+            </div>
+            
+            <div class="options">
+                <h3>分析选项</h3>
+                <div class="option-group">
+                    <label>分析模板</label>
+                    <select id="template">
+                        <option value="mold_defect_analysis">🔧 模具缺陷分析 (中文)</option>
+                        <option value="general_vision">🔍 通用图像分析</option>
+                        <option value="document_analysis">📄 文档分析</option>
+                    </select>
+                </div>
+                <div class="option-group">
+                    <label>输出语言</label>
+                    <select id="language">
+                        <option value="zh">中文</option>
+                        <option value="en">English</option>
+                    </select>
+                </div>
+                <div class="option-group">
+                    <label>Webhook URL (可选)</label>
+                    <input type="text" id="webhook" placeholder="http://your-server.com/webhook">
+                </div>
+            </div>
+            
+            <button type="submit" class="btn" id="submitBtn">🚀 开始分析</button>
+        </form>
+        
+        <div id="status"></div>
+        <div id="result" class="result" style="display: none;">
+            <h3>分析结果</h3>
+            <pre id="resultContent"></pre>
+        </div>
+    </div>
+
+    <script>
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const fileInfo = document.getElementById('fileInfo');
+        const fileName = document.getElementById('fileName');
+        const status = document.getElementById('status');
+        const result = document.getElementById('result');
+        const resultContent = document.getElementById('resultContent');
+        const submitBtn = document.getElementById('submitBtn');
+        
+        let selectedFile = null;
+        
+        // Drag and drop
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            handleFile(e.dataTransfer.files[0]);
+        });
+        dropZone.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', (e) => handleFile(e.target.files[0]));
+        
+        function handleFile(file) {
+            if (!file) return;
+            selectedFile = file;
+            fileName.textContent = file.name;
+            fileInfo.style.display = 'block';
+            status.style.display = 'none';
+            result.style.display = 'none';
+        }
+        
+        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!selectedFile) {
+                showStatus('请选择文件', 'error');
+                return;
+            }
+            
+            submitBtn.disabled = true;
+            showStatus('⏳ 上传中...', 'processing');
+            
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+            formData.append('prompt_template', document.getElementById('template').value);
+            formData.append('webhook_url', document.getElementById('webhook').value);
+            formData.append('options', JSON.stringify({
+                output_language: document.getElementById('language').value,
+                analysis_depth: 'detailed'
+            }));
+            
+            try {
+                // Submit job
+                const response = await fetch('http://192.168.1.196:8081/api/v1/jobs/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.error) {
+                    throw new Error(data.error.message);
+                }
+                
+                const jobId = data.job_id;
+                showStatus(`✅ 任务已提交: ${jobId}<br>⏳ 正在分析中... (预计30-60秒)`, 'processing');
+                
+                // Poll for completion
+                let attempts = 0;
+                const maxAttempts = 60; // 5 minutes max
+                
+                while (attempts < maxAttempts) {
+                    await new Promise(r => setTimeout(r, 5000)); // Check every 5 seconds
+                    
+                    const statusRes = await fetch(`http://192.168.1.196:8081/api/v1/jobs/${jobId}`);
+                    const statusData = await statusRes.json();
+                    
+                    if (statusData.status === 'completed') {
+                        // Get results
+                        const resultRes = await fetch(`http://192.168.1.196:8081/api/v1/jobs/${jobId}/result`);
+                        const resultData = await resultRes.json();
+                        
+                        showStatus(`✅ 分析完成!`, 'success');
+                        resultContent.textContent = JSON.stringify(resultData, null, 2);
+                        result.style.display = 'block';
+                        break;
+                    } else if (statusData.status === 'failed') {
+                        throw new Error(statusData.error?.message || '处理失败');
+                    }
+                    
+                    attempts++;
+                    const progress = statusData.progress ? Math.round(statusData.progress * 100) : 0;
+                    showStatus(`⏳ 处理中... ${progress}%<br>任务ID: ${jobId}`, 'processing');
+                }
+                
+                if (attempts >= maxAttempts) {
+                    throw new Error('处理超时');
+                }
+                
+            } catch (error) {
+                showStatus(`❌ 错误: ${error.message}`, 'error');
+            } finally {
+                submitBtn.disabled = false;
+            }
+        });
+        
+        function showStatus(message, type) {
+            status.innerHTML = message;
+            status.className = type;
+            status.style.display = 'block';
+        }
+    </script>
+</body>
+</html>

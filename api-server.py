@@ -1063,6 +1063,18 @@ def get_image(job_id: str, image_id: str):
     return send_file(image_path, mimetype="image/jpeg")
 
 
+@app.route("/upload", methods=["GET"])
+def upload_page():
+    """Serve the HTML upload page"""
+    return send_file("/home/michael/sandriverfishbot/upload.html", mimetype="text/html")
+
+
+@app.route("/", methods=["GET"])
+def index_page():
+    """Serve the HTML upload page as home page"""
+    return send_file("/home/michael/sandriverfishbot/upload.html", mimetype="text/html")
+
+
 @app.route("/api/v1/queue", methods=["GET"])
 def get_queue_status():
     """Get queue status"""
