@@ -70,9 +70,10 @@ pip show flask flask-cors requests 2>/dev/null >/dev/null || {
 echo -e "${GREEN}✓ Dependencies ready${NC}"
 echo ""
 
-# Kill any existing processes on port 8080
+# Kill any existing processes on ports
 echo "Cleaning up existing processes..."
 lsof -ti:$PORT 2>/dev/null | xargs kill -9 2>/dev/null || true
+lsof -ti:$LLAMA_PORT 2>/dev/null | xargs kill -9 2>/dev/null || true
 sleep 2
 
 # Start llama-server in background
@@ -80,7 +81,7 @@ echo -e "${GREEN}Starting llama-server...${NC}"
 $LLAMA_SERVER \
     -m "$MODEL_PATH" \
     --mmproj "$MMPROJ_PATH" \
-    --port $PORT \
+    --port $LLAMA_PORT \
     -ngl 99 \
     --ctx-size 8192 \
     --threads 8 \
@@ -95,8 +96,8 @@ echo ""
 # Wait for llama-server to be ready
 echo "Waiting for llama-server to initialize..."
 for i in {1..30}; do
-    if curl -s http://localhost:$PORT/v1/models >/dev/null 2>&1; then
-        echo -e "${GREEN}✓ llama-server ready${NC}"
+    if curl -s http://localhost:$LLAMA_PORT/v1/models >/dev/null 2>&1; then
+        echo -e "${GREEN}✓ llama-server ready on port $LLAMA_PORT${NC}"
         break
     fi
     sleep 1
@@ -127,7 +128,7 @@ echo ""
 echo "Waiting for API server to initialize..."
 for i in {1..10}; do
     if curl -s http://localhost:$PORT/api/v1/health >/dev/null 2>&1; then
-        echo -e "${GREEN}✓ API server ready${NC}"
+        echo -e "${GREEN}✓ API server ready on port $PORT${NC}"
         break
     fi
     sleep 1
